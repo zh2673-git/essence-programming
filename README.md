@@ -1,8 +1,11 @@
 # Essence Programming
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![中文](https://img.shields.io/badge/中文-README-blue)](./README.zh-CN.md)
 
 > A systematic methodology for software design and implementation based on **First Principles** and **Formal Logic**.
+
+[English](./README.md) | [中文](./README.zh-CN.md)
 
 ## The Philosophy: Logic-Driven Design
 

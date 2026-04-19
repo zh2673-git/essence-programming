@@ -1,8 +1,11 @@
 # 本质编程 (Essence Programming)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![English](https://img.shields.io/badge/English-README-blue)](./README.md)
 
 > 基于**第一性原理**与**形式逻辑**的系统化软件设计与实现方法论。
+
+[English](./README.md) | [中文](./README.zh-CN.md)
 
 ---
 
