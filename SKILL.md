@@ -18,6 +18,43 @@ description: "基于'三阶方法论'（是什么-为什么-怎么做）和'类-
 
 **关键原则**：所有分析或设计必须从**本质逻辑推导**，杜绝随意性。
 
+### 设计原则
+
+#### 原则1：单一状态源（Single Source of Truth）
+
+> **全局状态是唯一信息源，所有节点读写同一个状态对象。**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    单一状态源模式                        │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│   ┌─────────────┐      读写      ┌─────────────┐       │
+│   │   节点A     │ ←────────────→ │   全局状态   │       │
+│   │  (方法)     │                │  (属性集合)  │       │
+│   └─────────────┘                └─────────────┘       │
+│         ↑                              ↑               │
+│         │      读写              读写    │               │
+│   ┌─────────────┐                ┌─────────────┐       │
+│   │   节点B     │ ←────────────→ │   节点C     │       │
+│   │  (方法)     │                │  (方法)     │       │
+│   └─────────────┘                └─────────────┘       │
+│                                                         │
+│   边（路由）：只决定执行顺序，不传递数据                 │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**实践要点**：
+- 节点只通过**全局状态**交换数据，不直接传递参数
+- 节点执行完返回**状态更新片段**，由框架合并到全局状态
+- 路由（边）只根据全局状态决定**下一个执行哪个节点**
+
+**比喻理解**：
+- 全局状态 = 共享的"大屏幕/工作台"
+- 节点 = 学生/工人，负责在大屏幕上写内容（动手的人）
+- 边 = 指挥者，决定哪个学生下一个上场（只安排顺序，不动手）
+
 ---
 
 ## 两大使用场景
@@ -154,6 +191,12 @@ description: "基于'三阶方法论'（是什么-为什么-怎么做）和'类-
 - [ ] 已执行逆向三阶分析（怎么做→为什么→是什么）
 - [ ] 已生成项目级文档（00-{repo}-三阶解构.md）
 - [ ] 已识别并标记需深入分析的模块（✅）
+
+**基础设施四层分析（项目通用层）**
+- [ ] **数据规矩**：项目使用了哪些数据类型定义？（Pydantic、Dataclass、Interface）
+- [ ] **数据存储**：数据存在哪里？（数据库、缓存、文件、内存）
+- [ ] **数据流转**：状态如何更新？（验证、事务、异常处理机制）
+- [ ] **接口层**：模块间如何通信？（API、事件、函数调用）
 
 **模块级分析（递归自动执行）**
 - [ ] 对每个 ✅需深入 的模块执行深入分析
@@ -343,6 +386,21 @@ C:\Users\LX\Documents\Obsidian Vault\github/
 
 **核心问题**：如何实现？
 
+### 3.0 基础设施四层（通用设计框架）
+
+在任何项目实现之前，先明确基础设施的四个层面。这四层是所有项目的"标配"，与业务无关：
+
+| 层面 | 核心问题 | 对应 Skill 概念 | 典型实现 |
+|-----|---------|----------------|---------|
+| **数据规矩** | 属性是什么类型？有什么约束？ | 属性定义 | Pydantic、Dataclass、TypeScript Interface |
+| **数据存储** | 属性值存在哪里？ | 持久化设计 | 数据库、缓存、文件、内存变量 |
+| **数据流转** | 属性如何从一个状态变为另一个状态？ | 方法编排 | 验证、转换、事务、异常处理 |
+| **接口层** | 模块间如何传递数据？ | 接口定义 | API、函数参数、事件、消息队列 |
+
+**设计顺序**：先定义数据规矩 → 确定存储方式 → 设计流转逻辑 → 暴露接口契约。
+
+---
+
 ### 3.1 模块划分（从属性推导）
 
 基于第1步识别的属性，划分模块：
@@ -527,6 +585,95 @@ class TaskStatusRouter:
         History.record(task_id, "cancel", old=task.status, new="cancelled")
         return task.save()
 ```
+
+#### 路由的本质：以 LangGraph 为例
+
+路由的本质就是**条件判断决定执行顺序**。LangGraph 是一个典型的实现：
+
+| LangGraph 概念 | 对应 Skill 概念 | 职责说明 |
+|---------------|----------------|---------|
+| **State（全局状态）** | 项目的属性集合 | 所有节点共享的"大屏幕"，存储所有数据 |
+| **Node（节点）** | 方法/函数 | "动手的执行者"，读写全局状态 |
+| **Edge（边）** | 路由 | "指路的指挥"，决定下一个执行哪个节点 |
+| **Checkpointer** | 历史模块 | 保存状态变更记录，支持回溯 |
+
+**核心原则：单一状态源**
+
+```
+全局状态 = 共享的"大屏幕/工作台"
+节点 = 学生/工人，负责在大屏幕上写内容（动手的人）
+边 = 指挥者，决定哪个学生下一个上场（只安排顺序，不动手）
+```
+
+**LangGraph 代码示例**：
+
+```python
+from langgraph.graph import StateGraph, END
+from typing import TypedDict
+
+# 1. 数据规矩：定义状态类型
+class State(TypedDict):
+    user_input: str
+    messages: list
+    need_tool: bool
+    final_answer: str
+
+# 2. 节点定义（方法）
+def user_input_node(state: State) -> State:
+    """用户输入节点：将输入写入全局状态"""
+    return {"user_input": state["user_input"], "messages": []}
+
+def llm_node(state: State) -> State:
+    """LLM节点：读取全局状态，生成回答"""
+    response = call_llm(state["user_input"])
+    return {
+        "messages": state["messages"] + [response],
+        "need_tool": response.get("need_tool", False),
+        "final_answer": response.get("content", "")
+    }
+
+def tool_node(state: State) -> State:
+    """工具节点：调用工具，更新状态"""
+    tool_result = execute_tool(state["messages"][-1])
+    return {"messages": state["messages"] + [tool_result]}
+
+def end_node(state: State) -> State:
+    """结束节点：设置完成标志"""
+    return {"final_answer": state["final_answer"]}
+
+# 3. 路由函数（边）
+def route_by_tool_need(state: State) -> str:
+    """根据状态决定下一个节点"""
+    if state["need_tool"]:
+        return "tool"  # 需要工具 → 工具节点
+    return "end"     # 不需要 → 结束节点
+
+# 4. 构建图（编排）
+builder = StateGraph(State)
+builder.add_node("input", user_input_node)
+builder.add_node("llm", llm_node)
+builder.add_node("tool", tool_node)
+builder.add_node("end", end_node)
+
+# 5. 定义边（路由）
+builder.add_edge("input", "llm")  # 线性流转
+builder.add_conditional_edges(     # 条件路由
+    "llm",
+    route_by_tool_need,
+    {"tool": "tool", "end": "end"}
+)
+builder.add_edge("tool", "llm")   # 循环：工具执行后回到LLM
+builder.add_edge("end", END)
+
+# 6. 接口层
+graph = builder.compile()
+result = graph.invoke({"user_input": "查询天气"})  # 启动执行
+```
+
+**关键洞察**：
+- 节点只管**读写全局状态**，不直接传递数据
+- 边只管**决定执行顺序**，不修改状态
+- 所有数据流转都通过**全局状态**完成
 
 ### 3.4 接口设计（跨模块契约）
 
